@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Passwort zurücksetzen | ME/CFS Connect</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#302744;background:#faf7ff}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px}.panel{width:min(100%,460px);background:white;padding:32px;border-radius:22px;box-shadow:0 12px 45px #5c42831c}.brand{font-size:1.12rem;color:#7252ba;font-weight:750;letter-spacing:.02em}h1{font-size:1.7rem;margin:22px 0 10px}p{line-height:1.55;color:#5c526b}label{display:block;font-weight:650;margin:20px 0 8px}input{width:100%;font:inherit;padding:14px;border:1px solid #c8b9df;border-radius:10px}input:focus{outline:2px solid #8a68cc;outline-offset:1px}button{width:100%;margin-top:24px;background:#7552c8;color:white;border:0;border-radius:11px;padding:15px;font:inherit;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.message{padding:12px 14px;border-radius:10px;background:#f1ebfa;margin-top:16px;line-height:1.5}.message.error{background:#fff0f0;color:#8d2438}.hidden{display:none}small{color:#6b6176}
+</style>
+</head>
+<body><main class="panel">
+<div class="brand">💜 ME/CFS Connect</div>
+<h1>Neues Passwort festlegen</h1>
+<p>Hier kannst du ein neues Passwort für dein bestehendes Konto vergeben.</p>
+<div id="status" class="message" role="status" aria-live="polite">Wiederherstellungslink wird geprüft …</div>
+<form id="form" class="hidden">
+<label for="password">Neues Passwort</label><input id="password" type="password" minlength="8" autocomplete="new-password" required>
+<label for="confirm">Passwort wiederholen</label><input id="confirm" type="password" minlength="8" autocomplete="new-password" required>
+<small>Mindestens 8 Zeichen. Verwende ein einzigartiges Passwort.</small>
+<button id="save" type="submit">Passwort speichern</button>
+</form>
+<p id="done" class="hidden">Du kannst jetzt ME/CFS Connect öffnen und dich mit deinem neuen Passwort anmelden.</p>
+</main>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// Einmalig mit dem öffentlichen Supabase anon/publishable Key ergänzen.
+// Niemals einen service_role- oder secret-Key hier eintragen!
+const SUPABASE_URL = 'https://abludidwureyyeiuxmqz.supabase.co';
+const SUPABASE_PUBLIC_KEY = 'HIER_SUPABASE_PUBLIC_ANON_KEY_EINTRAGEN';
+const status = document.getElementById('status');
+const form = document.getElementById('form');
+const done = document.getElementById('done');
+const save = document.getElementById('save');
+function message(text,error=false){status.textContent=text;status.className='message'+(error?' error':'');}
+if(SUPABASE_PUBLIC_KEY.startsWith('HIER_')){
+  message('Diese Seite muss vor der Verwendung noch mit dem öffentlichen Supabase-Schlüssel verbunden werden.',true);
+}else{
+  const supabase=createClient(SUPABASE_URL,SUPABASE_PUBLIC_KEY,{auth:{detectSessionInUrl:true,persistSession:false,autoRefreshToken:false}});
+  async function initialize(){
+    try{
+      const query=new URLSearchParams(location.search);
+      const hash=new URLSearchParams(location.hash.slice(1));
+      const authError=query.get('error_description')||hash.get('error_description');
+      if(authError)throw new Error('Der Link ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.');
+      const tokenHash=query.get('token_hash');
+      if(tokenHash){
+        const {error}=await supabase.auth.verifyOtp({token_hash:tokenHash,type:'recovery'});
+        if(error)throw error;
+      }else if(hash.get('access_token')&&hash.get('refresh_token')){
+        const {error}=await supabase.auth.setSession({access_token:hash.get('access_token'),refresh_token:hash.get('refresh_token')});
+        if(error)throw error;
+      }else if(query.get('code')){
+        const {error}=await supabase.auth.exchangeCodeForSession(query.get('code'));
+        if(error)throw error;
+      }else{
+        throw new Error('Kein gültiger Wiederherstellungslink gefunden. Bitte öffne den Link aus deiner E-Mail.');
+      }
+      const {data:{user},error}=await supabase.auth.getUser();
+      if(error||!user)throw new Error('Der Wiederherstellungslink konnte nicht bestätigt werden. Bitte fordere einen neuen Link an.');
+      history.replaceState({},'',location.pathname);
+      message('Link bestätigt. Bitte wähle jetzt dein neues Passwort.');
+      form.classList.remove('hidden');
+    }catch(e){message(e.message||'Der Link konnte nicht geprüft werden.',true);}
+  }
+  form.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const password=document.getElementById('password').value;
+    const confirm=document.getElementById('confirm').value;
+    if(password!==confirm){message('Die Passwörter stimmen nicht überein.',true);return;}
+    if(password.length<8){message('Das Passwort muss mindestens 8 Zeichen haben.',true);return;}
+    save.disabled=true;
+    try{
+      const {error}=await supabase.auth.updateUser({password});
+      if(error)throw error;
+      form.classList.add('hidden');done.classList.remove('hidden');
+      message('Dein Passwort wurde erfolgreich geändert.');
+      await supabase.auth.signOut();
+    }catch(e){message('Das Passwort konnte nicht gespeichert werden: '+(e.message||'Unbekannter Fehler'),true);}
+    finally{save.disabled=false;}
+  });
+  initialize();
+}
+</script>
+</body></html>
