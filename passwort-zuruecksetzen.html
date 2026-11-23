@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Passwort zurücksetzen – ME/CFS Connect</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#30263e;background:#faf7ff}*{box-sizing:border-box}body{margin:0;padding:54px 16px}.card{max-width:460px;margin:auto;background:#fff;border-radius:24px;padding:32px;box-shadow:0 12px 40px #45305c13}.brand{color:#7552c8;font-weight:800;font-size:20px}h1{font-size:25px;line-height:1.25;margin:26px 0 16px}p{line-height:1.55;color:#51445f}label{display:block;font-weight:650;margin:18px 0 8px}input{width:100%;font:inherit;padding:14px;border:1px solid #bcb0ce;border-radius:10px}button{width:100%;border:0;border-radius:11px;padding:15px;background:#7552c8;color:white;font:inherit;font-weight:700;margin-top:22px;cursor:pointer}button:disabled{opacity:.6;cursor:wait}.notice{border-radius:12px;padding:14px;margin:18px 0;line-height:1.5;background:#f1eafc}.error{background:#fff0f0;color:#9b1830}.success{background:#eaf8ef;color:#176239}[hidden]{display:none!important}.small{font-size:13px}
+</style>
+</head>
+<body><main class="card"><div class="brand">💜 ME/CFS Connect</div><h1>Neues Passwort festlegen</h1><p>Vergib ein neues Passwort für dein bestehendes Konto.</p>
+<div id="status" class="notice">Wiederherstellungslink wird geprüft …</div>
+<form id="form" hidden><label for="password">Neues Passwort</label><input id="password" type="password" autocomplete="new-password" minlength="8" required><label for="confirm">Passwort wiederholen</label><input id="confirm" type="password" autocomplete="new-password" minlength="8" required><button id="submit" type="submit">Passwort speichern</button></form>
+<p class="small">Öffne diese Seite nur über den Link aus deiner Passwort-Wiederherstellungs-E-Mail. Gib dein Passwort niemals an andere weiter.</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+(async function(){
+'use strict';
+const URL='https://abludidwureyyeiuxmqz.supabase.co';
+const KEY='sb_publishable_a5sbW0kPDq-MRE8HpKl_OQ_IVouUlUV';
+const status=document.getElementById('status'),form=document.getElementById('form'),submit=document.getElementById('submit');
+function message(s,kind=''){status.textContent=s;status.className='notice '+kind;status.hidden=false;}
+if(!window.supabase){message('Die sichere Verbindung konnte nicht geladen werden. Bitte überprüfe deine Internetverbindung und lade die Seite erneut.','error');return;}
+const client=window.supabase.createClient(URL,KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+const query=new URLSearchParams(location.search),hash=new URLSearchParams(location.hash.slice(1));
+try{
+let error=query.get('error_description')||hash.get('error_description');if(error)throw new Error(error);
+const tokenHash=query.get('token_hash');
+if(tokenHash){const {error:e}=await client.auth.verifyOtp({token_hash:tokenHash,type:'recovery'});if(e)throw e;}
+else if(hash.get('access_token')&&hash.get('refresh_token')){const {error:e}=await client.auth.setSession({access_token:hash.get('access_token'),refresh_token:hash.get('refresh_token')});if(e)throw e;}
+else{message('Kein gültiger Wiederherstellungslink erkannt. Bitte fordere einen neuen Passwort-Link an.','error');return;}
+history.replaceState(null,'',location.pathname);
+message('Link bestätigt. Bitte wähle jetzt dein neues Passwort.');form.hidden=false;
+form.addEventListener('submit',async e=>{e.preventDefault();const pw=document.getElementById('password').value,repeat=document.getElementById('confirm').value;if(pw.length<8){message('Das Passwort muss mindestens 8 Zeichen lang sein.','error');return;}if(pw!==repeat){message('Die beiden Passwörter stimmen nicht überein.','error');return;}submit.disabled=true;message('Passwort wird gespeichert …');try{const {error:err}=await client.auth.updateUser({password:pw});if(err)throw err;form.hidden=true;message('Dein Passwort wurde erfolgreich gespeichert! Du kannst dich jetzt in der ME/CFS Connect App anmelden.','success');await client.auth.signOut();}catch(err){message('Passwort konnte nicht gespeichert werden: '+(err.message||'Unbekannter Fehler'),'error');}finally{submit.disabled=false;}});
+}catch(e){message('Dieser Wiederherstellungslink ist ungültig oder abgelaufen. Bitte fordere einen neuen Link an.','error');}
+})();
+</script></body></html>
